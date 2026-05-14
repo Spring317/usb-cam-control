@@ -4,12 +4,32 @@ import os
 
 block_cipher = None
 
+extra_binaries = []
+extra_datas = []
+
+# On macOS, include homebrew libgphoto2 dependencies
+if sys.platform == 'darwin':
+    # Default brew prefix on Apple Silicon is /opt/homebrew, on Intel is /usr/local
+    brew_prefixes = ['/opt/homebrew', '/usr/local']
+    for prefix in brew_prefixes:
+        if os.path.exists(prefix + '/lib/libgphoto2.dylib'):
+            extra_binaries += [
+                (prefix + '/lib/libgphoto2.dylib', '.'),
+                (prefix + '/lib/libgphoto2_port.dylib', '.'),
+            ]
+            extra_datas += [
+                (prefix + '/lib/libgphoto2', 'libgphoto2'),
+                (prefix + '/lib/libgphoto2_port', 'libgphoto2_port'),
+            ]
+            break
+
 a = Analysis(
     ['desktop_app.py'],
     pathex=[],
-    binaries=[],
+    binaries=extra_binaries,
     datas=[
-        ('frontend', 'frontend')
+        ('frontend', 'frontend'),
+        *extra_datas,
     ],
     hiddenimports=[
         'uvicorn.logging',
@@ -33,22 +53,6 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
-
-# On macOS, include homebrew libgphoto2 dependencies
-if sys.platform == 'darwin':
-    # Default brew prefix on Apple Silicon is /opt/homebrew, on Intel is /usr/local
-    brew_prefixes = ['/opt/homebrew', '/usr/local']
-    for prefix in brew_prefixes:
-        if os.path.exists(prefix + '/lib/libgphoto2.dylib'):
-            a.binaries += [
-                (prefix + '/lib/libgphoto2.dylib', '.'),
-                (prefix + '/lib/libgphoto2_port.dylib', '.'),
-            ]
-            a.datas += [
-                (prefix + '/lib/libgphoto2', 'libgphoto2'),
-                (prefix + '/lib/libgphoto2_port', 'libgphoto2_port')
-            ]
-            break
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
