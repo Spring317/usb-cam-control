@@ -1,0 +1,61 @@
+name: Build macOS App
+
+on:
+  push:
+    branches:
+      - mac
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        brew install libgphoto2 create-dmg
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pywebview pyinstaller
+
+    - name: Build Application Bundle
+      run: |
+        pyinstaller cam-control.spec
+
+    - name: Create DMG
+      run: |
+        # create captures dir before bundling so it exists
+        mkdir -p dist/CanonControl.app/Contents/MacOS/captures
+        create-dmg \
+          --volname "CanonControl Installer" \
+          --window-pos 200 120 \
+          --window-size 600 400 \
+          --icon-size 100 \
+          --icon "CanonControl.app" 150 190 \
+          --hide-extension "CanonControl.app" \
+          --app-drop-link 450 190 \
+          "CanonControl-macOS.dmg" \
+          "dist/CanonControl.app"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: CanonControl-macOS
+        path: CanonControl-macOS.dmg
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: CanonControl-macOS.dmg
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

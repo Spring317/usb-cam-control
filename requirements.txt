@@ -3,3 +3,4 @@ uvicorn[standard]
 gphoto2
 websockets
 pydantic
+pywebview>=4.4.0
