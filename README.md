@@ -28,6 +28,9 @@ sudo apt install ffmpeg v4l2loopback-dkms
 ### Windows
 Running this natively on Windows requires specific libusb driver replacements via Zadig or MSYS2 compilation. It is highly recommended to run this inside **WSL2** (Windows Subsystem for Linux) and pass your USB device through to WSL using `usbipd-win`.
 
+### macOS
+A fully standalone native macOS `.app` bundle and `.dmg` installer is automatically built via GitHub Actions. You do **not** need to manually install dependencies or run the python backend if you simply want to use the application! See the Usage section below.
+
 ## Installation Setup
 
 1. **Clone the repository and enter the directory:**
@@ -65,3 +68,12 @@ If you only want to use the camera as a webcam in video conferencing apps:
 ./scripts/start_webcam.sh
 ```
 This script configures `v4l2loopback` and pipes the `gphoto2` live feed directly into a virtual video device.
+
+### 3. macOS Native Application
+For macOS users, a beautifully packaged native desktop application is automatically compiled for you:
+1. Navigate to the **Actions** tab of your GitHub repository.
+2. Click on the latest successful run of the **Build macOS App** workflow.
+3. Scroll down to the **Artifacts** section and download the `CanonControl-macOS.dmg` file.
+4. Double-click the `.dmg` file and drag the `CanonControl` app to your Applications folder.
+5. Connect your camera, open the app, and you're ready to go!
+*Note: Because this app is built via GitHub Actions and is unsigned, you may need to **Right-Click -> Open** the app the very first time to bypass Apple's Gatekeeper security warning.*
