@@ -108,11 +108,14 @@ class CameraController:
                 results[key] = self._set_config_value(key, val)
             return results
 
-    def capture_image(self, download_dir="./captures"):
+    def capture_image(self, download_dir=None):
         with self.lock:
             if not self._connected:
                 raise Exception("Camera not connected")
             
+            if download_dir is None:
+                download_dir = os.path.expanduser("~/Pictures/CanonCaptures")
+
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
 

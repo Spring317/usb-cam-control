@@ -75,7 +75,7 @@ def capture_image():
 
 @app.get("/api/images/{filename}")
 def get_image(filename: str):
-    file_path = os.path.join("./captures", filename)
+    file_path = os.path.expanduser(f"~/Pictures/CanonCaptures/{filename}")
     if os.path.exists(file_path):
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Image not found")
@@ -102,5 +102,5 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
-    os.makedirs("./captures", exist_ok=True)
+    os.makedirs(os.path.expanduser("~/Pictures/CanonCaptures"), exist_ok=True)
     uvicorn.run(app, host="0.0.0.0", port=8000)

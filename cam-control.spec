@@ -9,8 +9,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('frontend', 'frontend'),
-        ('captures', 'captures')
+        ('frontend', 'frontend')
     ],
     hiddenimports=[
         'uvicorn.logging',
