@@ -1,0 +1,9 @@
+\contentsline {section}{\numberline {1}System Data Flow Architecture}{2}{section.1}%
+\contentsline {section}{\numberline {2}UML Use Case Diagram}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Actor Definitions}{2}{subsection.2.1}%
+\contentsline {section}{\numberline {3}UML Sequence Diagram: Full Data Acquisition Lifecycle}{3}{section.3}%
+\contentsline {section}{\numberline {4}Data Extraction and Preview Mechanics}{4}{section.4}%
+\contentsline {subsection}{\numberline {4.1}PTP Capture Target and In-Memory Storage}{4}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}C-Python Buffer Pointer Retrieval}{5}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Live Preview Frame Extraction}{5}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Conclusion}{5}{section.5}%

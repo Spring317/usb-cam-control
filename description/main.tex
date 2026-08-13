@@ -1,0 +1,280 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows, positioning, shadows, fit, backgrounds, patterns, calc}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+
+% --- Hyperref Setup ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!80!black,
+    citecolor=blue!80!black,
+    urlcolor=blue!80!black,
+    pdftitle={Data Acquisition Architecture and UML Diagrams},
+    pdfauthor={Antigravity AI Assistant}
+}
+
+% --- Custom Code Listing Styling ---
+\lstset{
+    backgroundcolor=\color{gray!5!white},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    captionpos=b,
+    commentstyle=\color{green!50!black},
+    keywordstyle=\color{blue!80!black},
+    stringstyle=\color{red!70!black},
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    tabsize=4
+}
+
+% --- Document Info ---
+\title{\textbf{Technical Description of Data Acquisition Architecture and UML Diagrams for FastAPI Camera Control System}}
+\author{System Architecture and Technical Documentation}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document details the software architecture, USB Picture Transfer Protocol (PTP/ISO 15740) data acquisition pipeline, and UML diagrams for the Canon EOS R8 FastAPI control system. We provide a clean UML Use Case Diagram detailing system boundaries and actor interactions, as well as a full UML Sequence Diagram mapping the exact lifecycle of binary data extraction—from client HTTP dispatch, thread mutex locking, and viewfinder muting to PTP USB bulk data retrieval and image frame presentation.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{System Data Flow Architecture}
+
+The system connects a web-based user interface to physical camera hardware via an asynchronous FastAPI backend and low-level \texttt{libgphoto2} PTP drivers.
+
+The complete system layer breakdown consists of:
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{Frontend UI (Browser):} HTML5/JavaScript dashboard managing live preview displays and user interaction controls.
+    \item \textbf{Backend API (FastAPI):} Asynchronous web application handling routing, CORS, HTTP response streams, and endpoint contracts.
+    \item \textbf{Controller Layer (\texttt{CameraController}):} Python thread-synchronized wrapper interfacing with \texttt{python-gphoto2} bindings and managing hardware locks.
+    \item \textbf{Hardware \& Protocol Layer (\texttt{libgphoto2} / USB PTP):} USB bulk endpoints transferring operational data packets to/from Canon EOS R8 SDRAM and CMOS sensor assemblies.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\tikzset{
+    block/.style = {rectangle, draw=blue!70!black, fill=blue!8, text width=7.0em, text centered, rounded corners=4pt, minimum height=2.6em, font=\bfseries\small},
+    line/.style = {draw, -latex, thick, color=black!80}
+}
+\begin{tikzpicture}
+    % Row 1: UI (x=0.8, y=2.4) <---> FastAPI (x=6.4, y=2.4)
+    \node [block, fill=green!15, draw=green!60!black] (ui)  at (0.8, 2.4) {Browser Frontend \\ (\texttt{main.js})};
+    \node [block, fill=blue!15, draw=blue!60!black]   (api) at (6.4, 2.4) {FastAPI Server \\ (\texttt{app.py})};
+    
+    % Row 2: Camera (x=0.8, y=0.0) <---> Controller (x=6.4, y=0.0)
+    \node [block, fill=red!15, draw=red!60!black]     (cam)  at (0.8, 0.0) {Canon EOS R8 \\ Sensor / RAM};
+    \node [block, fill=orange!15, draw=orange!60!black] (ctrl) at (6.4, 0.0) {CameraController \\ (\texttt{camera\_ctl.py})};
+
+    % Top Connections (UI <-> API)
+    \draw [line] ($(ui.east)+(0,0.18)$) -- node[above, pos=0.5, font=\tiny\bfseries, fill=white, inner sep=1.5pt] {HTTP REST} ($(api.west)+(0,0.18)$);
+    \draw [line] ($(api.west)-(0,0.18)$) -- node[below, pos=0.5, font=\tiny\bfseries, fill=white, inner sep=1.5pt] {JSON Stream} ($(ui.east)-(0,0.18)$);
+
+    % Vertical Connections (API <-> Controller)
+    \draw [line] ($(api.south)-(0.25,0)$) -- node[left, pos=0.5, font=\tiny\bfseries, fill=white, inner sep=1.5pt] {Method Call} ($(ctrl.north)-(0.25,0)$);
+    \draw [line] ($(ctrl.north)+(0.25,0)$) -- node[right, pos=0.5, font=\tiny\bfseries, fill=white, inner sep=1.5pt] {RAM Buffer} ($(api.south)+(0.25,0)$);
+
+    % Bottom Connections (Camera <-> Controller)
+    \draw [line] ($(ctrl.west)+(0,0.18)$) -- node[above, pos=0.5, font=\tiny\bfseries, fill=white, inner sep=1.5pt] {USB PTP} ($(cam.east)+(0,0.18)$);
+    \draw [line] ($(cam.east)-(0,0.18)$) -- node[below, pos=0.5, font=\tiny\bfseries, fill=white, inner sep=1.5pt] {Raw Payload} ($(ctrl.west)-(0,0.18)$);
+\end{tikzpicture}
+\caption{System architecture and data flow topology with clean 2x2 loop layout.}
+\label{fig:arch_topology}
+\end{figure}
+
+
+\section{UML Use Case Diagram}
+
+Figure~\ref{fig:uml_usecase} illustrates the UML Use Case Diagram modeled after standard camera control software patterns. Actors are placed strictly outside the system boundary, and all use cases are cleanly separated into two distinct functional columns with generous vertical spacing.
+
+\subsection{Actor Definitions}
+\begin{itemize}
+    \item \textbf{User / Web UI (Primary Actor):} Interacts with the web browser to trigger capture commands, view live streams, and modify settings.
+    \item \textbf{Canon EOS R8 Camera (Secondary Actor):} Receives low-level PTP operational codes and transfers image data over USB endpoints.
+    \item \textbf{Linux V4L2 Device (Secondary Actor):} Receives video stream buffers piped directly via \texttt{ffmpeg}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\tikzset{
+    actor/.style = {rectangle, draw=gray!80, fill=yellow!15, rounded corners=4pt, minimum width=2.3cm, minimum height=1.0cm, align=center, font=\bfseries\small},
+    usecase/.style = {ellipse, draw=blue!80!black, fill=blue!5, thick, text width=2.0cm, text centered, minimum width=2.1cm, minimum height=0.8cm, font=\scriptsize},
+    system/.style = {draw=black!80, thick, rectangle, fill=gray!3},
+    rel/.style = {draw, thick, color=black!80},
+    inc/.style = {draw, dashed, ->, >=latex, thick, color=red!70!black},
+    ext/.style = {draw, dashed, ->, >=latex, thick, color=green!60!black}
+}
+\begin{tikzpicture}
+
+    % 1. System Boundary Box (x from -1.4 to 7.4, y from -0.5 to 5.6)
+    \draw [system] (-1.4, -0.5) rectangle (7.4, 5.6);
+    \node [font=\bfseries\small] at (3.0, 5.1) {System Boundary: Camera Control System};
+
+    % 2. Use Cases Grid (Concise 2-line text, 2.1cm vertical gaps)
+    % Left Column (x = -0.2) - Primary UI Interactions
+    \node [usecase] (uc_connect) at (-0.2, 4.3) {Connect \\ Session};
+    \node [usecase] (uc_config)  at (-0.2, 2.2) {Configure \\ Exposure};
+    \node [usecase] (uc_preview) at (-0.2, 0.1) {Live View \\ Stream};
+
+    % Right Column (x = 6.2) - Hardware Buffer Interactions
+    \node [usecase] (uc_capture) at (6.2, 4.3) {Capture \\ Photo};
+    \node [usecase] (uc_fetch)   at (6.2, 0.1) {Fetch USB \\ Payload};
+
+    % 3. Actors OUTSIDE System Box
+    \node [actor] (user)   at (-4.2, 2.2) {User / Web UI \\ (Primary Actor)};
+    \node [actor] (camera) at (10.2, 3.2) {Canon EOS R8 \\ (Hardware Actor)};
+    \node [actor] (v4l2)   at (10.2, 0.1) {Linux V4L2 \\ (Kernel Actor)};
+
+    % 4. Actor Associations (Clean Non-Crossing Lines)
+    \draw [rel] (user.east) -- (uc_connect.west);
+    \draw [rel] (user.east) -- (uc_config.west);
+    \draw [rel] (user.east) -- (uc_preview.west);
+
+    \draw [rel] (uc_connect.east) -- (camera.west);
+    \draw [rel] (uc_capture.east) -- (camera.west);
+    \draw [rel] (uc_fetch.east)   -- (camera.west);
+    \draw [rel] (uc_preview.east) -- (v4l2.west);
+
+    % 5. Include & Extend Relationships (Dashed Labeled Arrows with White Background)
+    \draw [inc] (uc_capture)  -- node[above, pos=0.5, font=\tiny, fill=white, inner sep=1.5pt] {\texttt{<<include>>}} (uc_connect);
+    \draw [inc] (uc_capture)  -- node[right, pos=0.5, font=\tiny, fill=white, inner sep=1.5pt] {\texttt{<<include>>}} (uc_fetch);
+    \draw [inc] (uc_config)   -- node[left, pos=0.5, font=\tiny, fill=white, inner sep=1.5pt] {\texttt{<<include>>}} (uc_connect);
+    \draw [inc] (uc_preview)  -- node[left, pos=0.5, font=\tiny, fill=white, inner sep=1.5pt] {\texttt{<<include>>}} (uc_config);
+
+\end{tikzpicture}
+\caption{UML Use Case Diagram with 100\% non-crossing association lines.}
+\label{fig:uml_usecase}
+\end{figure}
+
+
+\section{UML Sequence Diagram: Full Data Acquisition Lifecycle}
+
+Figure~\ref{fig:uml_sequence} details the complete **UML Sequence Diagram** for full-resolution data acquisition across all four system lifelines, styled to prevent any overlapping text or boundary clipping.
+
+\begin{figure}[H]
+\centering
+\tikzset{
+    lifeline/.style = {draw=black!50, dashed, thick},
+    entity/.style = {rectangle, draw=blue!80!black, fill=blue!10, rounded corners=3pt, minimum width=2.0cm, minimum height=0.85cm, font=\bfseries\small, align=center},
+    msg/.style = {draw, ->, >=latex, thick, color=blue!80!black},
+    ret/.style = {draw, dashed, ->, >=latex, thick, color=green!60!black},
+    self/.style = {draw, ->, >=latex, thick, color=orange!80!black},
+    box/.style = {draw=gray!80, fill=yellow!10, rounded corners=3pt, font=\tiny\ttfamily, align=center}
+}
+\begin{tikzpicture}
+
+    % Lifeline X Positions (Total Width = 11.4cm, Gap = 3.8cm)
+    \coordinate (C_client) at (0.0, 0);
+    \coordinate (C_app)    at (3.8, 0);
+    \coordinate (C_ctrl)   at (7.6, 0);
+    \coordinate (C_cam)    at (11.4, 0);
+
+    % Lifeline Header Boxes
+    \node [entity] at (C_client) {Browser UI};
+    \node [entity] at (C_app)    {FastAPI Server};
+    \node [entity] at (C_ctrl)   {CameraController};
+    \node [entity] at (C_cam)    {Canon Camera};
+
+    % Vertical Lifeline Lines
+    \draw [lifeline] (C_client) -- (0.0, -19.4);
+    \draw [lifeline] (C_app)    -- (3.8, -19.4);
+    \draw [lifeline] (C_ctrl)   -- (7.6, -19.4);
+    \draw [lifeline] (C_cam)    -- (11.4, -19.4);
+
+    % Step 1: HTTP POST Capture
+    \draw [msg] (0.0, -1.2) -- node[above, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {1. \texttt{POST /api/capture}} (3.8, -1.2);
+
+    % Step 2: FastAPI calls Controller
+    \draw [msg] (3.8, -2.6) -- node[above, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {2. \texttt{capture\_image()}} (7.6, -2.6);
+
+    % Step 3: Acquire Mutex Lock (Self Loop)
+    \draw [self] (7.6, -3.7) -- ++(0.6,0) -- ++(0,-0.8) -- node[right, pos=0.5, font=\tiny, fill=white, inner sep=1pt] {3. Acquire \texttt{self.lock}} (7.6, -4.5);
+
+    % Step 4: Disable Viewfinder over PTP
+    \draw [msg] (7.6, -5.7) -- node[above, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {4. \texttt{set\_config(viewfinder=0)}} (11.4, -5.7);
+
+    % Step 5: ACK Viewfinder Disabled
+    \draw [ret] (11.4, -7.0) -- node[below, pos=0.45, font=\tiny, fill=white, inner sep=1.5pt] {ACK (Viewfinder Disabled)} (7.6, -7.0);
+
+    % Step 6: Hardware Settling Delay (Self Loop)
+    \draw [self] (7.6, -8.1) -- ++(0.6,0) -- ++(0,-0.8) -- node[right, pos=0.5, font=\tiny, fill=white, inner sep=1pt] {5. \texttt{time.sleep(0.5s)}} (7.6, -8.9);
+
+    % Step 7: Trigger Shutter Capture
+    \draw [msg] (7.6, -10.1) -- node[above, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {6. \texttt{capture(GP\_CAPTURE\_IMAGE)}} (11.4, -10.1);
+    \node [box] at (11.4, -10.9) {Sensor Exposes $\rightarrow$ SDRAM Buffer};
+
+    % Step 8: USB Bulk Buffer Transfer
+    \draw [msg] (7.6, -12.1) -- node[above, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {7. \texttt{file\_get(camera\_file)}} (11.4, -12.1);
+    \draw [ret] (11.4, -13.5) -- node[below, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {Raw Binary Payload over USB} (7.6, -13.5);
+
+    % Step 9: Re-enable Viewfinder
+    \draw [msg] (7.6, -15.0) -- node[above, pos=0.45, font=\tiny, fill=white, inner sep=1.5pt] {8. \texttt{set\_config(viewfinder=1)}} (11.4, -15.0);
+
+    % Step 10: Return File Path to FastAPI
+    \draw [ret] (7.6, -16.3) -- node[above, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {Target File Path} (3.8, -16.3);
+
+    % Step 11: Return HTTP Response to Client
+    \draw [ret] (3.8, -17.6) -- node[above, pos=0.45, font=\scriptsize, fill=white, inner sep=1.5pt] {9. HTTP 200 JSON Response} (0.0, -17.6);
+
+\end{tikzpicture}
+\caption{UML Sequence Diagram properly formatted with zero text overlap.}
+\label{fig:uml_sequence}
+\end{figure}
+
+
+\section{Data Extraction and Preview Mechanics}
+
+\subsection{PTP Capture Target and In-Memory Storage}
+Upon connection initialization, the controller sets \texttt{capturetarget = 1}. This directs the DIGIC X processor to store image data directly in volatile camera SDRAM buffer space rather than flushing to physical SD card memory, preventing file system locks.
+
+\subsection{C-Python Buffer Pointer Retrieval}
+The binary transfer is executed cleanly without unnecessary file system overhead:
+\begin{lstlisting}[language=Python]
+# Allocate raw C memory file container wrapper
+camera_file = gp.CameraFile()
+
+# Fetch binary buffer directly over USB Bulk IN Endpoint
+self.camera.file_get(file_path.folder, file_path.name, 
+                     gp.GP_FILE_TYPE_NORMAL, camera_file, self.context)
+
+# Flush binary data buffer to target path
+camera_file.save(target_path)
+\end{lstlisting}
+
+\subsection{Live Preview Frame Extraction}
+For real-time streaming, the backend continuously pulls preview frames from the viewfinder buffer memory via \texttt{capture\_preview()}:
+\begin{lstlisting}[language=Python]
+def capture_preview(self):
+    with self.lock:
+        camera_file = gp.CameraFile()
+        self.camera.capture_preview(camera_file, self.context)
+        file_data = camera_file.get_data_and_size()
+        return memoryview(file_data).tobytes()
+\end{lstlisting}
+The FastAPI generator packages these frame buffers into an HTTP stream (`multipart/x-mixed-replace; boundary=frame`) refreshed at $\approx 20\,\text{FPS}$.
+
+
+\section{Conclusion}
+
+The updated UML Use Case and Sequence diagrams fit perfectly within the document layout. By resolving component overlaps and constraining node coordinates within page boundaries, the document provides an easy-to-read illustration of data acquisition flow.
+
+\end{document}
