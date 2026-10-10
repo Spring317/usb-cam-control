@@ -2,6 +2,9 @@ import gphoto2 as gp
 import threading
 import logging
 import os
+import subprocess
+import sys
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,8 +20,7 @@ class CameraController:
         with self.lock:
             if not self._connected:
                 try:
-                    self.camera = gp.Camera()
-                    self.camera.init(self.context)
+                    self.camera = self._init_camera()
                     self._connected = True
                     logger.info("Camera connected successfully.")
 
@@ -33,10 +35,15 @@ class CameraController:
                         except:
                             pass
                             
-                        # Set capture target to SDRAM to avoid SD card lock errors
+                        # Set capture target to SDRAM to avoid SD card lock errors.
+                        # This is a radio widget, so it must be set by choice label.
                         try:
                             ct = config.get_child_by_name('capturetarget')
-                            ct.set_value(1)
+                            for i in range(ct.count_choices()):
+                                choice = ct.get_choice(i)
+                                if 'internal' in choice.lower() or 'ram' in choice.lower():
+                                    ct.set_value(choice)
+                                    break
                         except:
                             pass
 
@@ -49,8 +56,64 @@ class CameraController:
                     logger.error(f"Failed to connect to camera: {e}")
                     self.camera = None
                     self._connected = False
-                    raise Exception(f"Failed to connect to camera: {e}")
+                    raise Exception(f"Failed to connect to camera: {e}. {self._connect_hint(e.code)}")
             return self._connected
+
+    def _release_macos_ptp_daemons(self):
+        """macOS's ImageCapture daemon (ptpcamerad, or PTPCamera on older
+        releases) grabs every PTP camera as soon as it is plugged in, which
+        prevents libgphoto2 from seeing/claiming it. There is no driver to
+        replace on macOS; the daemon just has to be killed right before we
+        claim the device (launchd respawns it, so this is done on every try)."""
+        if sys.platform != 'darwin':
+            return
+        for proc in ('ptpcamerad', 'PTPCamera'):
+            subprocess.run(['killall', '-9', proc],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def _init_camera(self, attempts=5):
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            self._release_macos_ptp_daemons()
+            camera = gp.Camera()
+            try:
+                cam_list = gp.Camera.autodetect(self.context)
+                detected = [(cam_list.get_name(i), cam_list.get_value(i))
+                            for i in range(cam_list.count())]
+                logger.info(f"Detected cameras (attempt {attempt}): {detected}")
+                if detected:
+                    # Prefer a Canon body if several devices are present
+                    name, addr = next(((n, a) for n, a in detected if 'canon' in n.lower()),
+                                      detected[0])
+                    abilities_list = gp.CameraAbilitiesList()
+                    abilities_list.load(self.context)
+                    camera.set_abilities(abilities_list[abilities_list.lookup_model(name)])
+                    port_info_list = gp.PortInfoList()
+                    port_info_list.load()
+                    camera.set_port_info(port_info_list[port_info_list.lookup_path(addr)])
+                    logger.info(f"Using {name} on {addr}")
+                camera.init(self.context)
+                return camera
+            except gp.GPhoto2Error as e:
+                last_error = e
+                logger.warning(f"Camera init attempt {attempt}/{attempts} failed: {e}")
+                try:
+                    camera.exit(self.context)
+                except gp.GPhoto2Error:
+                    pass
+                time.sleep(0.5)
+        raise last_error
+
+    @staticmethod
+    def _connect_hint(code):
+        if code in (gp.GP_ERROR_MODEL_NOT_FOUND, gp.GP_ERROR_IO_USB_CLAIM, gp.GP_ERROR_IO_USB_FIND):
+            hint = ("Check the USB cable, that the camera is on, and that its Wi-Fi/Bluetooth "
+                    "connections are disabled (USB control is blocked while wireless is active).")
+            if sys.platform == 'darwin':
+                hint += (" Quit Photos, Image Capture, EOS Utility and EOS Webcam Utility, "
+                         "then unplug/replug the camera and try again.")
+            return hint
+        return ""
 
     def disconnect(self):
         with self.lock:

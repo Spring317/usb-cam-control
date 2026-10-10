@@ -77,3 +77,10 @@ For macOS users, a beautifully packaged native desktop application is automatica
 4. Double-click the `.dmg` file and drag the `CanonControl` app to your Applications folder.
 5. Connect your camera, open the app, and you're ready to go!
 *Note: Because this app is built via GitHub Actions and is unsigned, you may need to **Right-Click -> Open** the app the very first time to bypass Apple's Gatekeeper security warning.*
+
+## Troubleshooting (macOS): `-105 Unknown model` / camera not found
+macOS's built-in ImageCapture daemon (`ptpcamerad`) grabs the camera as soon as it is plugged in, so libgphoto2 can't see it. There is no driver to replace on macOS; the backend kills `ptpcamerad` and retries automatically every time you click **Connect**. If it still fails:
+1. Quit Photos, Image Capture, EOS Utility and EOS Webcam Utility. In Image Capture, set "Connecting this camera opens" to **No application**.
+2. On the R8, turn off Wi-Fi/Bluetooth (USB control is blocked while a wireless connection is active).
+3. Unplug and replug the camera, then click **Connect** again.
+4. To test outside the app: `killall -9 ptpcamerad; gphoto2 --auto-detect` (needs `brew install gphoto2`).

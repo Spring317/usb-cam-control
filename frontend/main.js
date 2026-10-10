@@ -27,7 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 await checkStatus();
             } else {
-                alert('Failed to connect to camera.');
+                const err = await res.json().catch(() => ({}));
+                alert('Failed to connect to camera.\n\n' + (err.detail || res.statusText));
             }
         } catch (e) {
             console.error(e);
