@@ -27,6 +27,10 @@ jobs:
         pip install -r requirements.txt
         pip install pywebview pyinstaller
 
+    - name: Inspect gphoto2 install
+      run: |
+        python -c "import gphoto2, os; d = os.path.dirname(gphoto2.__file__); print(gphoto2.__version__, d); print(sorted(os.listdir(d)))"
+
     - name: Build Application Bundle
       run: |
         pyinstaller cam-control.spec

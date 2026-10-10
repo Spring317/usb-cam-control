@@ -7,8 +7,22 @@ block_cipher = None
 extra_binaries = []
 extra_datas = []
 
-# On macOS, include homebrew libgphoto2 dependencies
-if sys.platform == 'darwin':
+from PyInstaller.utils.hooks import collect_all
+import importlib.util
+
+# The PyPI gphoto2 wheel bundles its own libgphoto2 plus camlibs/iolibs.
+# Collect all of it so the app uses one consistent set of libraries.
+_gp_dir = os.path.dirname(importlib.util.find_spec('gphoto2').origin)
+gphoto2_wheel_bundled = os.path.isdir(os.path.join(_gp_dir, 'camlibs'))
+extra_hiddenimports = []
+if gphoto2_wheel_bundled:
+    _datas, _binaries, _hidden = collect_all('gphoto2')
+    extra_datas += _datas
+    extra_binaries += _binaries
+    extra_hiddenimports += _hidden
+
+# Otherwise (gphoto2 built from source) fall back to Homebrew's libgphoto2
+if sys.platform == 'darwin' and not gphoto2_wheel_bundled:
     # Default brew prefix on Apple Silicon is /opt/homebrew, on Intel is /usr/local
     brew_prefixes = ['/opt/homebrew', '/usr/local']
     for prefix in brew_prefixes:
@@ -25,7 +39,7 @@ if sys.platform == 'darwin':
 
 a = Analysis(
     ['desktop_app.py'],
-    pathex=[],
+    pathex=['backend'],
     binaries=extra_binaries,
     datas=[
         ('frontend', 'frontend'),
@@ -42,7 +56,9 @@ a = Analysis(
         'uvicorn.protocols.websockets.auto',
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
-        'webview'
+        'webview',
+        'camera_controller',
+        *extra_hiddenimports,
     ],
     hookspath=[],
     hooksconfig={},

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import asyncio
 from camera_controller import CameraController
 import os
+import sys
 
 app = FastAPI()
 
@@ -98,7 +99,13 @@ def video_feed():
     return StreamingResponse(gen_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 # Mount frontend static files last so API routes take precedence
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+# Resolve the frontend relative to this file (or the PyInstaller bundle), not the
+# working directory, which is "/" when launched as a macOS .app
+if getattr(sys, 'frozen', False):
+    FRONTEND_DIR = os.path.join(sys._MEIPASS, "frontend")
+else:
+    FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

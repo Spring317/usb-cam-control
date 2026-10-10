@@ -6,11 +6,17 @@ if getattr(sys, 'frozen', False):
     bundle_dir = sys._MEIPASS
     os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = bundle_dir + os.pathsep + os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
     
-    # Locate the plugin directories included by PyInstaller
-    for d in os.listdir(os.path.join(bundle_dir, "libgphoto2_port")):
-        os.environ["IOLIBS"] = os.path.join(bundle_dir, "libgphoto2_port", d)
-    for d in os.listdir(os.path.join(bundle_dir, "libgphoto2")):
-        os.environ["CAMLIBS"] = os.path.join(bundle_dir, "libgphoto2", d)
+    # Only needed when the Homebrew libgphoto2 was bundled (gphoto2 built from
+    # source). The PyPI wheel ships its own camlibs/iolibs and points
+    # CAMLIBS/IOLIBS at them itself on import.
+    for env, sub in (("IOLIBS", "libgphoto2_port"), ("CAMLIBS", "libgphoto2")):
+        plugin_root = os.path.join(bundle_dir, sub)
+        if os.path.isdir(plugin_root):
+            for d in os.listdir(plugin_root):
+                os.environ[env] = os.path.join(plugin_root, d)
+else:
+    # backend/app.py imports camera_controller as a top-level module
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 
 import uvicorn
 import threading
